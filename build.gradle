@@ -64,6 +64,16 @@ jar {
 	}
 }
 
+// GPLv3 要求分发时附带许可证文本：源码包也一并打入 LICENSE
+// 注意：rename 的闭包在**执行期**运行，不能引用 project（Gradle 配置缓存会报错），
+// 所以名称要在配置期捕获成局部变量。
+def sourcesLicenseSuffix = "_" + project.name
+tasks.named('sourcesJar') {
+	from("LICENSE") {
+		rename { it + sourcesLicenseSuffix }
+	}
+}
+
 publishing {
 	publications {
 		create("mavenJava", MavenPublication) {

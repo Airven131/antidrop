@@ -192,3 +192,16 @@
 3. 标签依赖**物品的自定义名称**：改名后需要同步更新名单；未改名物品不会命中带标签的条目。
 4. 不支持注册表物品标签（`#xxx`）匹配。
 5. 创造模式的「拖出界面」走独立代码路径，已单独覆盖。
+
+---
+
+## 9. 许可证
+
+本项目以 **GNU General Public License v3.0**（`GPL-3.0-only`）发布。
+完整协议文本见仓库根目录 [LICENSE](LICENSE)，与 <https://www.gnu.org/licenses/gpl-3.0.txt> 逐字节一致。
+
+* 你可以自由使用、修改、再分发本 mod；
+* **再分发（含修改版）时必须继续以 GPLv3 授权，并提供对应源码**；
+* 分发二进制（jar）时请附带许可证文本 —— 构建产物中已包含 `LICENSE_antidrop`（由 `build.gradle` 自动打入）；
+* 若希望改为「GPLv3 或任意更高版本」（`GPL-3.0-or-later`），需要同时修改
+  `fabric.mod.json` 的 `license` 字段与本段说明。
