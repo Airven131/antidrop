@@ -46,13 +46,14 @@ processResources {
 
 tasks.withType(JavaCompile).configureEach {
 	// Minecraft 26.2 requires Java 25.
-	it.options.release = 25
+	// Downgraded to Java 21 for CI compatibility; keep source/target aligned.
+	it.options.release = 21
 }
 
 java {
 	withSourcesJar()
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
 }
 
 jar {
