@@ -1,0 +1,60 @@
+name: build
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      # 仓库里没有提交 gradle-wrapper.jar（二进制），所以由 action 提供 Gradle。
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      - name: Build
+        run: gradle build --stacktrace --no-daemon
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: antidrop-jars
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+      # 打 tag（v*）时自动创建 GitHub Release 并附带 jar
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/libs/*.jar
+          generate_release_notes: true
+
+      # 可选：发布到 Modrinth（需要仓库 secret：MODRINTH_TOKEN / MODRINTH_PROJECT_ID）
+      # - name: Publish to Modrinth
+      #   if: startsWith(github.ref, 'refs/tags/')
+      #   uses: Kir-Antipov/mc-publish@v3
+      #   with:
+      #     modrinth-id: ${{ secrets.MODRINTH_PROJECT_ID }}
+      #     modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+      #     files: build/libs/!(*-sources).jar
+      #     loaders: fabric
+      #     game-versions: '26.3'
+      #     java: '25'

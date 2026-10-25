@@ -1,0 +1,76 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+}
+
+base {
+	archivesName = project.archives_base_name
+}
+
+repositories {
+	// Mod Menu maven - the only externally hosted soft dependency.
+	maven {
+		name = 'Terraformers'
+		url = 'https://maven.terraformersmc.com/'
+	}
+}
+
+dependencies {
+	// Minecraft 26.1+ ships unobfuscated, so Loom no longer applies mappings and no
+	// remapping happens: there is deliberately NO `mappings "..."` line here.
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// --- Soft dependency: Mod Menu (optional config entry point) -------------------
+	// Because 26.x needs no remapping, plain Gradle configurations are used instead of
+	// modImplementation / modCompileOnly. Mod Menu's own README states the same
+	// ("Prior to Minecraft 26.x, use modImplementation instead").
+	// compileOnly keeps Mod Menu out of the built jar; the modmenu entry point is simply
+	// never instantiated when Mod Menu is not installed.
+	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+	// Uncomment to be able to click the "Config" button inside `runClient`.
+	// TODO VERIFY: the dev-runtime configuration name for Loom 1.17.
+	// localRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	// Minecraft 26.2 requires Java 25.
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+	def projectName = project.name
+	inputs.property "projectName", projectName
+
+	from("LICENSE") {
+		rename { "${it}_$projectName" }
+	}
+}
+
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			from components.java
+		}
+	}
+	repositories {
+		// Publishing repositories go here.
+	}
+}

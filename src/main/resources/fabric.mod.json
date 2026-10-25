@@ -1,0 +1,40 @@
+{
+	"schemaVersion": 1,
+	"id": "antidrop",
+	"version": "${version}",
+	"name": "AntiDrop",
+	"description": "Client-side protection against accidentally dropping whitelisted items (Q key in the world, Q key in container screens and dragging a stack out of a container screen).",
+	"authors": [
+		"AntiDrop contributors"
+	],
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.airven.antidrop.AntiDropClient"
+		],
+		"modmenu": [
+			"com.airven.antidrop.integration.AntiDropModMenu"
+		]
+	},
+	"mixins": [
+		{
+			"config": "antidrop.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.20.0",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"modmenu": "*"
+	},
+	"custom": {
+		"modmenu": {
+			"update_checker": false
+		}
+	}
+}
