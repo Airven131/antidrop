@@ -1,6 +1,7 @@
 package com.airven.antidrop.integration;
 
 import com.airven.antidrop.config.AntiDropConfig;
+import com.airven.antidrop.config.AntiDropConfig.ListMode;
 import com.airven.antidrop.config.AntiDropConfig.Target;
 import com.airven.antidrop.util.Entry;
 import com.airven.antidrop.util.ItemMatcher;
@@ -11,13 +12,16 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
  * 主配置界面（Mod Menu 的「配置」按钮打开的就是它）。
  *
- * <p>布局：4 个保护开关（2×2）+ 名单摘要 + 若干入口按钮。
- * 名单的增删与「每个防丢功能的黑/白名单」在 {@link AntiDropListScreen} 中编辑。
+ * <p>布局：4 个保护开关（2×2）+ **全部名单条目的滚动展示** + 入口按钮。
+ * 列表依次展示：全局名单、世界 Q、容器 Q、拖出（每个功能显示其模式与条目），
+ * 用鼠标滚轮翻看。名单的增删与黑/白名单在 {@link AntiDropListScreen} 中编辑。
  *
  * <p>26.3 GUI API（均已反编译核实）：{@code Screen#extractRenderState(GuiGraphicsExtractor, int, int, float)}、
  * {@code GuiGraphicsExtractor#text/centeredText}、{@code Button.Builder#pos/size/tooltip}、
@@ -28,8 +32,12 @@ public class AntiDropConfigScreen extends Screen {
 	private static final int WIDGET_WIDTH = 240;
 	private static final int COLUMN_WIDTH = 118;
 	private static final int BUTTON_HEIGHT = 20;
+	private static final int LINE_HEIGHT = 10;
+	private static final int LIST_TOP = 78;
 
 	private static final int TITLE_COLOR = 0xFFFFFFFF;
+	private static final int HEADER_COLOR = 0xFFFFF59D;
+	private static final int ENTRY_COLOR = 0xFFE0E0E0;
 	private static final int HINT_COLOR = 0xFFA0A0A0;
 	private static final int OK_COLOR = 0xFF55FF55;
 	private static final int ERROR_COLOR = 0xFFFF5555;
@@ -38,6 +46,11 @@ public class AntiDropConfigScreen extends Screen {
 
 	private Component status = Component.empty();
 	private boolean statusIsError;
+	private int scroll;
+
+	/** 列表中的一行（小节标题或条目）。 */
+	private record Row(Component text, int color) {
+	}
 
 	/**
 	 * @param parent 关闭后返回的界面（Mod Menu 会传入其 Mods 界面）
@@ -70,20 +83,20 @@ public class AntiDropConfigScreen extends Screen {
 		// 名单编辑入口
 		this.addRenderableWidget(Button.builder(Component.translatable("antidrop.config.editLists"),
 						button -> this.openListEditor(Target.GLOBAL))
-				.pos(left, this.height - 80).size(WIDGET_WIDTH, BUTTON_HEIGHT)
+				.pos(left, this.height - 86).size(WIDGET_WIDTH, BUTTON_HEIGHT)
 				.tooltip(Tooltip.create(Component.translatable("antidrop.config.editLists.tip")))
 				.build());
 
 		// 添加手持物品 / 从文件重载
 		this.addRenderableWidget(Button.builder(Component.translatable("antidrop.config.addHeld"),
 						button -> this.addHeldItem())
-				.pos(left, this.height - 56).size(COLUMN_WIDTH, BUTTON_HEIGHT).build());
+				.pos(left, this.height - 62).size(COLUMN_WIDTH, BUTTON_HEIGHT).build());
 		this.addRenderableWidget(Button.builder(Component.translatable("antidrop.config.reload"),
 						button -> this.reload())
-				.pos(right, this.height - 56).size(COLUMN_WIDTH, BUTTON_HEIGHT).build());
+				.pos(right, this.height - 62).size(COLUMN_WIDTH, BUTTON_HEIGHT).build());
 
 		this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> this.onClose())
-				.pos(left, this.height - 30).size(WIDGET_WIDTH, BUTTON_HEIGHT).build());
+				.pos(left, this.height - 36).size(WIDGET_WIDTH, BUTTON_HEIGHT).build());
 	}
 
 	/**
@@ -146,6 +159,7 @@ public class AntiDropConfigScreen extends Screen {
 	/** 重新读取磁盘配置（含版本迁移）。 */
 	private void reload() {
 		int size = AntiDropConfig.get().reloadFromDisk();
+		this.scroll = 0;
 		setStatus(Component.translatable("antidrop.config.status.reloaded", size), false);
 	}
 
@@ -154,58 +168,84 @@ public class AntiDropConfigScreen extends Screen {
 		this.statusIsError = error;
 	}
 
+	/**
+	 * 构造全部名单的展示行：全局 + 三个功能（各带模式标题与条目）。
+	 *
+	 * @return 行列表
+	 */
+	private static List<Row> buildRows() {
+		AntiDropConfig config = AntiDropConfig.get();
+		List<Row> rows = new ArrayList<>();
+
+		rows.add(new Row(Component.translatable("antidrop.config.section.global",
+				config.countFor(Target.GLOBAL)), HEADER_COLOR));
+		addEntryRows(rows, config.viewOf(Target.GLOBAL));
+
+		for (Target target : new Target[]{Target.HOTBAR, Target.INVENTORY_Q, Target.DRAG_OUT}) {
+			boolean black = config.modeFor(target) == ListMode.BLACKLIST;
+			rows.add(new Row(Component.translatable("antidrop.config.section.feature",
+					Component.translatable(target.translationKey()),
+					Component.translatable(black ? "antidrop.mode.blacklist" : "antidrop.mode.whitelist"),
+					config.countFor(target)), HEADER_COLOR));
+			addEntryRows(rows, config.viewOf(target));
+		}
+		return rows;
+	}
+
+	private static void addEntryRows(List<Row> rows, List<Entry> entries) {
+		if (entries.isEmpty()) {
+			rows.add(new Row(Component.translatable("antidrop.config.section.empty"), HINT_COLOR));
+			return;
+		}
+		for (Entry entry : entries) {
+			rows.add(new Row(Component.literal("- " + entry.display()), ENTRY_COLOR));
+		}
+	}
+
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor drawContext, int mouseX, int mouseY, float delta) {
 		super.extractRenderState(drawContext, mouseX, mouseY, delta);
 
 		int left = this.width / 2 - WIDGET_WIDTH / 2;
-		AntiDropConfig config = AntiDropConfig.get();
+		List<Row> rows = buildRows();
 
 		drawContext.centeredText(this.font, this.title, this.width / 2, 4, TITLE_COLOR);
 		drawContext.centeredText(this.font, Component.translatable("antidrop.config.fileHint"),
 				this.width / 2, 15, HINT_COLOR);
 
-		// 名单摘要
-		drawContext.text(this.font, Component.translatable("antidrop.config.summary.global",
-				config.countFor(Target.GLOBAL)), left, 74, TITLE_COLOR);
-		drawContext.text(this.font, Component.translatable("antidrop.config.summary.features",
-				featureSummary(config, Target.HOTBAR), featureSummary(config, Target.INVENTORY_Q),
-				featureSummary(config, Target.DRAG_OUT)),
-				left, 86, HINT_COLOR);
-		drawContext.text(this.font, Component.translatable("antidrop.config.summary.hint"),
-				left, 98, HINT_COLOR);
+		int listBottom = Math.max(LIST_TOP + LINE_HEIGHT, this.height - 100);
+		int visibleLines = Math.max(1, (listBottom - LIST_TOP) / LINE_HEIGHT);
 
-		// 全局名单前几条预览
-		int previewY = 114;
-		int shown = 0;
-		for (Entry entry : config.viewOf(Target.GLOBAL)) {
-			if (shown >= 3) {
-				drawContext.text(this.font, Component.translatable("antidrop.config.summary.more",
-						Math.max(0, config.countFor(Target.GLOBAL) - 3)), left, previewY, HINT_COLOR);
-				break;
-			}
-			drawContext.text(this.font, "- " + entry.display(), left, previewY, 0xFFE0E0E0);
-			previewY += 10;
-			shown++;
+		int maxScroll = Math.max(0, rows.size() - visibleLines);
+		if (this.scroll > maxScroll) {
+			this.scroll = maxScroll;
+		}
+		if (this.scroll < 0) {
+			this.scroll = 0;
+		}
+
+		int end = Math.min(rows.size(), this.scroll + visibleLines);
+		for (int i = this.scroll; i < end; i++) {
+			Row row = rows.get(i);
+			drawContext.text(this.font, row.text(), left, LIST_TOP + (i - this.scroll) * LINE_HEIGHT, row.color());
 		}
 
 		if (!this.status.getString().isEmpty()) {
-			drawContext.centeredText(this.font, this.status, this.width / 2, this.height - 94,
+			drawContext.centeredText(this.font, this.status, this.width / 2, this.height - 100,
 					this.statusIsError ? ERROR_COLOR : OK_COLOR);
 		}
 	}
 
-	/**
-	 * 生成形如 {@code 白(0)} 的功能名单摘要。
-	 *
-	 * @param config 配置
-	 * @param target 目标
-	 * @return 组件
-	 */
-	private static Component featureSummary(AntiDropConfig config, Target target) {
-		boolean black = config.modeFor(target) == AntiDropConfig.ListMode.BLACKLIST;
-		return Component.translatable(black ? "antidrop.config.summary.black" : "antidrop.config.summary.white",
-				config.countFor(target));
+	@Override
+	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+		if (super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) {
+			return true;
+		}
+		if (scrollY != 0) {
+			this.scroll -= (int) Math.signum(scrollY);
+			return true;
+		}
+		return false;
 	}
 
 	@Override
